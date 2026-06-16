@@ -1,0 +1,74 @@
+
+
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+
+-- Roles
+GRANT INSERT, UPDATE, DELETE ON public.news TO authenticated;
+GRANT ALL ON public.news TO service_role;
+ALTER TABLE public.news ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Anyone can read news" ON public.news FOR SELECT USING (true);
+CREATE POLICY "Admins can insert news" ON public.news FOR INSERT TO authenticated
+  WITH CHECK (public.has_role(auth.uid(), 'admin') AND auth.uid() = author_id);
+CREATE POLICY "Admins can update news" ON public.news FOR UPDATE TO authenticated
+  USING (public.has_role(auth.uid(), 'admin'));
+CREATE POLICY "Admins can delete news" ON public.news FOR DELETE TO authenticated
+  USING (public.has_role(auth.uid(), 'admin'));
+
+CREATE INDEX news_published_at_idx ON public.news (published_at DESC);
+
+-- Auto-grant admin role to the owner's email on signup
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $$
+BEGIN
+  IF NEW.email = 'krecuartem.2013@gmail.com' THEN
+    INSERT INTO public.user_roles (user_id, role)
+    VALUES (NEW.id, 'admin')
+    ON CONFLICT DO NOTHING;
+  ELSE
+    INSERT INTO public.user_roles (user_id, role)
+    VALUES (NEW.id, 'user')
+    ON CONFLICT DO NOTHING;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER on_auth_user_created
+AFTER INSERT ON auth.users
+FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
