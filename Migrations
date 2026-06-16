@@ -1,0 +1,107 @@
+
+-- Roles
+CREATE TYPE public.app_role AS ENUM ('admin', 'user');
+
+CREATE TABLE public.user_roles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  role public.app_role NOT NULL,
+  UNIQUE (user_id, role)
+);
+GRANT SELECT ON public.user_roles TO authenticated;
+GRANT ALL ON public.user_roles TO service_role;
+ALTER TABLE public.user_roles ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can read their own roles" ON public.user_roles
+  FOR SELECT TO authenticated USING (auth.uid() = user_id);
+
+CREATE OR REPLACE FUNCTION public.has_role(_user_id UUID, _role public.app_role)
+RETURNS BOOLEAN
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
+AS $$
+  SELECT EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = _user_id AND role = _role)
+$$;
+
+-- News table
+CREATE TABLE public.news (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title_de TEXT NOT NULL,
+  title_en TEXT NOT NULL,
+  content_de TEXT NOT NULL,
+  content_en TEXT NOT NULL,
+  author_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  published_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+GRANT SELECT ON public.news TO anon, authenticated;
+GRANT INSERT, UPDATE, DELETE ON public.news TO authenticated;
+GRANT ALL ON public.news TO service_role;
+ALTER TABLE public.news ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Anyone can read news" ON public.news FOR SELECT USING (true);
+CREATE POLICY "Admins can insert news" ON public.news FOR INSERT TO authenticated
+  WITH CHECK (public.has_role(auth.uid(), 'admin') AND auth.uid() = author_id);
+CREATE POLICY "Admins can update news" ON public.news FOR UPDATE TO authenticated
+  USING (public.has_role(auth.uid(), 'admin'));
+CREATE POLICY "Admins can delete news" ON public.news FOR DELETE TO authenticated
+  USING (public.has_role(auth.uid(), 'admin'));
+
+CREATE INDEX news_published_at_idx ON public.news (published_at DESC);
+
+-- Auto-grant admin role to the owner's email on signup
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $$
+BEGIN
+  IF NEW.email = 'krecuartem.2013@gmail.com' THEN
+    INSERT INTO public.user_roles (user_id, role)
+    VALUES (NEW.id, 'admin')
+    ON CONFLICT DO NOTHING;
+  ELSE
+    INSERT INTO public.user_roles (user_id, role)
+    VALUES (NEW.id, 'user')
+    ON CONFLICT DO NOTHING;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER on_auth_user_created
+AFTER INSERT ON auth.users
+FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+REVOKE EXECUTE ON FUNCTION public.has_role(UUID, public.app_role) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.has_role(uuid, public.app_role) TO authenticated, anon, service_role;
+REVOKE EXECUTE ON FUNCTION public.has_role(uuid, public.app_role) FROM anon, PUBLIC;
+
+CREATE TABLE public.comments (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  news_id uuid NOT NULL REFERENCES public.news(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  author_name text NOT NULL,
+  content text NOT NULL CHECK (char_length(content) BETWEEN 1 AND 2000),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX comments_news_id_idx ON public.comments(news_id, created_at DESC);
+
+GRANT SELECT ON public.comments TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.comments TO authenticated;
+GRANT ALL ON public.comments TO service_role;
+
+ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Anyone can read comments" ON public.comments
+  FOR SELECT USING (true);
+
+CREATE POLICY "Authenticated users can insert their own comments" ON public.comments
+  FOR INSERT TO authenticated
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own comments" ON public.comments
+  FOR DELETE TO authenticated
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Admins can delete any comment" ON public.comments
+  FOR DELETE TO authenticated
+  USING (public.has_role(auth.uid(), 'admin'));
