@@ -1,0 +1,507 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  Outlet,
+  Link,
+  createRootRouteWithContext,
+  useRouter,
+  HeadContent,
+  Scripts,
+} from "@tanstack/react-router";
+import { useEffect, type ReactNode } from "react";
+
+import appCss from "../styles.css?url";
+import { reportLovableError } from "../lib/lovable-error-reporting";
+import { LangProvider } from "@/lib/i18n";
+import { AuthProvider } from "@/lib/auth-context";
+import { Toaster } from "sonner";
+
+function NotFoundComponent() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <div className="max-w-md text-center">
+        <h1 className="text-7xl font-bold text-foreground">404</h1>
+        <h2 className="mt-4 text-xl font-semibold text-foreground">Page not found</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          The page you're looking for doesn't exist or has been moved.
+        </p>
+        <div className="mt-6">
+          <Link
+            to="/"
+            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Go home
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+  console.error(error);
+  const router = useRouter();
+  useEffect(() => {
+    reportLovableError(error, { boundary: "tanstack_root_error_component" });
+  }, [error]);
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <div className="max-w-md text-center">
+        <h1 className="text-xl font-semibold tracking-tight text-foreground">
+          This page didn't load
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Something went wrong on our end. You can try refreshing or head back home.
+        </p>
+        <div className="mt-6 flex flex-wrap justify-center gap-2">
+          <button
+            onClick={() => {
+              router.invalidate();
+              reset();
+            }}
+            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Try again
+          </button>
+          <a
+            href="/"
+            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+          >
+            Go home
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+  head: () => ({
+    meta: [
+      { charSet: "utf-8" },
+      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { title: "BERN — Deutscher Fußball News" },
+      { name: "description", content: "BERN: aktuelle Nachrichten zum deutschen Fußball, Bundesliga und DFB-Team. German football news in Deutsch und English." },
+      { property: "og:title", content: "BERN — Deutscher Fußball News" },
+      { property: "og:description", content: "BERN: aktuelle Nachrichten zum deutschen Fußball, Bundesliga und DFB-Team. German football news in Deutsch und English." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "BERN — Deutscher Fußball News" },
+      { name: "twitter:description", content: "BERN: aktuelle Nachrichten zum deutschen Fußball, Bundesliga und DFB-Team. German football news in Deutsch und English." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/43c46fd9-133b-4c71-b771-3ea0dca9bae3/id-preview-67ef28d0--153b6527-789a-4e5d-ade9-672c2b038776.lovable.app-1781536185623.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/43c46fd9-133b-4c71-b771-3ea0dca9bae3/id-preview-67ef28d0--153b6527-789a-4e5d-ade9-672c2b038776.lovable.app-1781536185623.png" },
+    ],
+    links: [
+      { rel: "stylesheet", href: appCss },
+      { rel: "preconnect", href: "https://fonts.googleapis.com" },
+      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;900&display=swap" },
+    ],
+  }),
+  shellComponent: RootShell,
+  component: RootComponent,
+  notFoundComponent: NotFoundComponent,
+  errorComponent: ErrorComponent,
+});
+
+function RootShell({ children }: { children: ReactNode }) {
+  return (
+    <html lang="en">
+      <head>
+        <HeadContent />
+      </head>
+      <body>
+        {children}
+        <Scripts />
+      </body>
+    </html>
+  );
+}
+
+function RootComponent() {
+  const { queryClient } = Route.useRouteContext();
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <LangProvider>
+        <AuthProvider>
+          <Outlet />
+          <Toaster theme="dark" richColors position="top-center" />
+        </AuthProvider>
+      </LangProvider>
+    </QueryClientProvider>
+  );import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth-context";
+import { useLang, tr } from "@/lib/i18n";
+import { SiteHeader } from "@/components/SiteHeader";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+
+function AdminPage() {
+  const { lang } = useLang();
+  const { user, isAdmin, loading } = useAuth();
+  const navigate = useNavigate();
+  const [titleDe, setTitleDe] = useState("");
+  const [titleEn, setTitleEn] = useState("");
+  const [contentDe, setContentDe] = useState("");
+  const [contentEn, setContentEn] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen">
+        <SiteHeader />
+        <p className="p-10 text-center text-muted-foreground">{tr("loading", lang)}</p>
+      </div>
+    );
+  }
+
+  if (!user || !isAdmin) {
+    return (
+      <div className="min-h-screen">
+        <SiteHeader />
+        <main className="mx-auto max-w-md px-4 py-16 text-center">
+          <h1 className="text-2xl font-bold">{tr("admin_only", lang)}</h1>
+          <Link to="/" className="mt-6 inline-block text-sm text-accent hover:underline">
+            ← {tr("back", lang)}
+          </Link>
+        </main>
+      </div>
+    );
+  }
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    const { error } = await supabase.from("news").insert({
+      title_de: titleDe,
+      title_en: titleEn,
+      content_de: contentDe,
+      content_en: contentEn,
+      author_id: user.id,
+    });
+    setBusy(false);
+    if (error) return toast.error(error.message);
+    toast.success(tr("news_published", lang));
+    navigate({ to: "/" });
+  };
+
+  return (
+    <div className="min-h-screen">
+      <SiteHeader />
+      <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+        <Link to="/" className="text-xs uppercase tracking-widest text-muted-foreground hover:text-foreground">
+          ← {tr("back", lang)}
+        </Link>
+        <h1 className="mt-3 text-3xl font-black sm:text-4xl">{tr("publish", lang)}</h1>
+
+        <form onSubmit={submit} className="mt-8 flex flex-col gap-5 rounded-xl border border-border bg-card p-6">
+          <div className="grid gap-5 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="td">{tr("title_de", lang)}</Label>
+              <Input id="td" required value={titleDe} onChange={(e) => setTitleDe(e.target.value)} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="te">{tr("title_en", lang)}</Label>
+              <Input id="te" required value={titleEn} onChange={(e) => setTitleEn(e.target.value)} />
+            </div>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="cd">{tr("content_de", lang)}</Label>
+            <Textarea id="cd" required rows={6} value={contentDe} onChange={(e) => setContentDe(e.target.value)} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="ce">{tr("content_en", lang)}</Label>
+            <Textarea id="ce" required rows={6} value={contentEn} onChange={(e) => setContentEn(e.target.value)} />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button asChild type="button" variant="outline">
+              <Link to="/">{tr("cancel", lang)}</Link>
+            </Button>
+            <Button type="submit" disabled={busy} className="bg-primary text-primary-foreground hover:bg-primary/90">
+              {busy ? "…" : tr("submit", lang)}
+            </Button>
+          </div>
+        </form>
+      </main>
+    </div>
+  );
+}
+
+export const Route = createFileRoute("/admin")({
+  component: AdminPage,
+});
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useLang, tr } from "@/lib/i18n";
+import { SiteHeader } from "@/components/SiteHeader";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+
+function AuthPage() {
+  const { lang } = useLang();
+  const navigate = useNavigate();
+  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      if (mode === "signup") {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo: `${window.location.origin}/` },
+        });
+        if (error) throw error;
+        toast.success("Account created");
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        toast.success("Welcome back");
+      }
+      navigate({ to: "/" });
+    } catch (err: any) {
+      toast.error(err.message ?? "Auth failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen">
+      <SiteHeader />
+      <main className="mx-auto flex max-w-md flex-col gap-6 px-4 py-12 sm:px-6">
+        <div>
+          <Link to="/" className="text-xs uppercase tracking-widest text-muted-foreground hover:text-foreground">
+            ← {tr("back", lang)}
+          </Link>
+          <h1 className="mt-3 text-3xl font-black">
+            {mode === "login" ? tr("login", lang) : tr("signup", lang)}
+          </h1>
+        </div>
+
+        <form onSubmit={submit} className="flex flex-col gap-4 rounded-xl border border-border bg-card p-6">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="email">{tr("email", lang)}</Label>
+            <Input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="password">{tr("password", lang)}</Label>
+            <Input id="password" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} />
+          </div>
+          <Button type="submit" disabled={busy} className="bg-primary text-primary-foreground hover:bg-primary/90">
+            {busy ? "…" : mode === "login" ? tr("login", lang) : tr("signup", lang)}
+          </Button>
+          <button
+            type="button"
+            onClick={() => setMode(mode === "login" ? "signup" : "login")}
+            className="text-xs text-muted-foreground hover:text-foreground"
+          >
+            {mode === "login" ? tr("signup", lang) : tr("login", lang)}
+          </button>
+        </form>
+      </main>
+    </div>
+  );
+}
+
+export const Route = createFileRoute("/auth")({
+  component: AuthPage,
+});import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
+import { Search, Calendar, Clock, Trash2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useLang, tr } from "@/lib/i18n";
+import { useAuth } from "@/lib/auth-context";
+import { SiteHeader } from "@/components/SiteHeader";
+import { Comments } from "@/components/Comments";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+
+type NewsRow = {
+  id: string;
+  title_de: string;
+  title_en: string;
+  content_de: string;
+  content_en: string;
+  published_at: string;
+};
+
+function HomePage() {
+  const { lang } = useLang();
+  const { isAdmin } = useAuth();
+  const [news, setNews] = useState<NewsRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
+
+  const load = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("news")
+      .select("id,title_de,title_en,content_de,content_en,published_at")
+      .order("published_at", { ascending: false });
+    if (error) toast.error(error.message);
+    setNews((data ?? []) as NewsRow[]);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return news;
+    return news.filter((n) => {
+      const title = lang === "de" ? n.title_de : n.title_en;
+      const content = lang === "de" ? n.content_de : n.content_en;
+      return (
+        title.toLowerCase().includes(q) ||
+        content.toLowerCase().includes(q) ||
+        n.title_de.toLowerCase().includes(q) ||
+        n.title_en.toLowerCase().includes(q)
+      );
+    });
+  }, [news, query, lang]);
+
+  const remove = async (id: string) => {
+    if (!confirm(tr("confirm_delete", lang))) return;
+    const { error } = await supabase.from("news").delete().eq("id", id);
+    if (error) return toast.error(error.message);
+    setNews((prev) => prev.filter((n) => n.id !== id));
+  };
+
+  return (
+    <div className="min-h-screen">
+      <SiteHeader />
+
+      <section className="mx-auto max-w-6xl px-4 pb-6 pt-10 sm:px-6 sm:pt-16">
+        <p className="text-xs font-bold uppercase tracking-[0.3em] text-accent">DFB · Bundesliga · 1.FC</p>
+        <h1 className="mt-3 text-4xl font-black leading-[0.95] sm:text-6xl">
+          {tr("tagline", lang)}
+        </h1>
+        <p className="mt-3 max-w-2xl text-base text-muted-foreground sm:text-lg">
+          {tr("subtitle", lang)}
+        </p>
+
+        <div className="relative mt-6 max-w-xl">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={tr("search_placeholder", lang)}
+            className="h-12 border-border bg-card pl-10 text-base"
+          />
+        </div>
+      </section>
+
+      <main className="mx-auto max-w-6xl px-4 pb-20 sm:px-6">
+        {loading ? (
+          <p className="py-16 text-center text-muted-foreground">{tr("loading", lang)}</p>
+        ) : filtered.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border p-12 text-center">
+            <p className="text-muted-foreground">{tr("no_news", lang)}</p>
+          </div>
+        ) : (
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {filtered.map((n) => (
+              <NewsCard key={n.id} item={n} lang={lang} onDelete={isAdmin ? () => remove(n.id) : undefined} />
+            ))}
+          </div>
+        )}
+      </main>
+
+      <footer className="border-t border-border bg-secondary/30 py-8 text-center text-xs text-muted-foreground">
+        <p className="bern-wordmark text-2xl font-black">BERN</p>
+        <p className="mt-1">© {new Date().getFullYear()} · {tr("tagline", lang)}</p>
+      </footer>
+    </div>
+  );
+}
+
+
+function NewsCard({
+  item,
+  lang,
+  onDelete,
+}: {
+  item: NewsRow;
+  lang: "de" | "en";
+  onDelete?: () => void;
+}) {
+  const date = new Date(item.published_at);
+  const dateStr = date.toLocaleDateString(lang === "de" ? "de-DE" : "en-GB", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+  const timeStr = date.toLocaleTimeString(lang === "de" ? "de-DE" : "en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const title = lang === "de" ? item.title_de : item.title_en;
+  const content = lang === "de" ? item.content_de : item.content_en;
+
+  return (
+    <article className="group relative flex flex-col overflow-hidden rounded-xl border border-border bg-card transition hover:border-primary/60 hover:shadow-[0_0_0_1px_var(--primary)]">
+      <div className="flag-bar h-1 w-full" />
+      <div className="flex flex-1 flex-col gap-3 p-5">
+        <div className="flex items-center gap-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          <span className="inline-flex items-center gap-1"><Calendar className="h-3 w-3" />{dateStr}</span>
+          <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{timeStr}</span>
+        </div>
+        <h2 className="text-xl font-bold leading-snug text-foreground">{title}</h2>
+        <p className="line-clamp-5 text-sm leading-relaxed text-muted-foreground">{content}</p>
+        {onDelete && (
+          <div className="mt-2 flex justify-end">
+            <Button onClick={onDelete} variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10 hover:text-destructive">
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+        <Comments newsId={item.id} />
+      </div>
+    </article>
+  );
+}
+
+export const Route = createFileRoute("/")({
+  component: HomePage,
+});# Routes
+
+TanStack Start uses **file-based routing**. Every `.tsx` file in this directory
+is a route. Do **not** create `src/pages/`, `src/routes/_app/index.tsx`, or
+`app/layout.tsx` — those are Next.js / Remix conventions. The only root layout
+is `src/routes/__root.tsx`.
+
+## Conventions
+
+| File | URL |
+| --- | --- |
+| `index.tsx` | `/` |
+| `about.tsx` | `/about` |
+| `users/index.tsx` | `/users` |
+| `users/$id.tsx` | `/users/:id` (dynamic — bare `$`, no curly braces) |
+| `posts/{-$category}.tsx` | `/posts/:category?` (optional segment) |
+| `files/$.tsx` | `/files/*` (splat — read via `_splat` param, never `*`) |
+| `_layout.tsx` | layout route (renders children via `<Outlet />`) |
+| `__root.tsx` | app shell — wraps every page; preserve `<Outlet />` |
+
+`routeTree.gen.ts` is auto-generated. Don't edit it by hand.
+
+
+
+}
